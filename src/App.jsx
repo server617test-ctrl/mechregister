@@ -8,11 +8,11 @@ import { supabase } from "./supabase";
    ============================================================ */
 
 const DEFAULT_THEME = {
-  bg: "#16181c",
-  panel: "#20242a",
-  accent: "#ffb400",
-  accent2: "#9aa4b0",
-  text: "#e7eaee",
+  bg: "#070811",
+  panel: "#0d1020",
+  accent: "#00e5ff",
+  accent2: "#ff2d95",
+  text: "#e6f6ff",
 };
 
 const DEFAULT_CONFIG = {
@@ -142,6 +142,12 @@ export default function App() {
 
   /* -------- generic row CRUD -------- */
   const makeCrud = (table, list, setList, ref, toRow = (x) => x) => ({
+    save: async (row) => {
+      const exists = ref.current.some((x) => x.id === row.id);
+      setList(exists ? ref.current.map((x) => (x.id === row.id ? row : x)) : [...ref.current, row]);
+      const { error } = await supabase.from(table).upsert(toRow(row));
+      if (error) dbError(error);
+    },
     add: async (row) => {
       setList([...ref.current, row]);
       const { error } = await supabase.from(table).insert(toRow(row));
@@ -560,108 +566,209 @@ function ImgUpload({ value, onChange }) {
   );
 }
 
+function Modal({ title, onClose, children, footer }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">{title}<button className="btn-ghost sm" onClick={onClose}>✕</button></div>
+        <div className="modal-body">{children}</div>
+        <div className="modal-foot">{footer}</div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div className="field">
+      <label>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function DeleteBtn({ onConfirm }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <button className={"btn-danger sm" + (armed ? " armed" : "")}
+      onClick={() => { if (armed) onConfirm(); else { sClick(); setArmed(true); } }}>
+      {armed ? "Confirm?" : "Delete"}
+    </button>
+  );
+}
+
 function ItemsEditor({ items, crud, showToast }) {
-  const [draft, setDraft] = useState({ name: "", price: "", category: "", img: null });
-  const add = () => {
-    if (!draft.name || draft.price === "") { sError(); showToast("Item needs a name and price.", false); return; }
-    crud.add({ id: uid(), name: draft.name, price: Number(draft.price), category: draft.category || "Misc", img: draft.img });
-    setDraft({ name: "", price: "", category: "", img: null });
-    sSuccess(); showToast("Item added.");
+  const [q, setQ] = useState("");
+  const [editing, setEditing] = useState(null);
+  const shown = items.filter((i) => i.name.toLowerCase().includes(q.toLowerCase()));
+  const openAdd = () => { sClick(); setEditing({ isNew: true, row: { id: uid(), name: "", price: "", category: "", img: null } }); };
+  const openEdit = (row) => { sClick(); setEditing({ isNew: false, row: { ...row } }); };
+  const set = (patch) => setEditing((e) => ({ ...e, row: { ...e.row, ...patch } }));
+  const save = () => {
+    const r = editing.row;
+    if (!r.name.trim() || r.price === "" || isNaN(Number(r.price))) { sError(); showToast("Item needs a name and a valid price.", false); return; }
+    crud.save({ ...r, name: r.name.trim(), price: Number(r.price), category: (r.category || "").trim() || "Misc" });
+    setEditing(null); sSuccess(); showToast(editing.isNew ? "Item added." : "Item updated.");
   };
   return (
     <div>
-      <div className="editor-add">
-        <ImgUpload value={draft.img} onChange={(img) => setDraft({ ...draft, img })} />
-        <input className="search" placeholder="Item name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-        <input className="search num" type="number" placeholder="Price" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} />
-        <input className="search" placeholder="Category" value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} />
-        <button className="btn-primary" onClick={add}>Add item</button>
+      <div className="mg-toolbar">
+        <input className="search" placeholder="Search items…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="btn-primary" onClick={openAdd}>＋ Add item</button>
       </div>
-      <div className="editor-list">
-        {items.map((i) => (
-          <div key={i.id} className="editor-row">
-            <ImgUpload value={i.img} onChange={(img) => crud.update(i.id, { img })} />
-            <input className="search" value={i.name} onChange={(e) => crud.update(i.id, { name: e.target.value })} />
-            <input className="search num" type="number" value={i.price} onChange={(e) => crud.update(i.id, { price: Number(e.target.value) })} />
-            <input className="search" value={i.category || ""} onChange={(e) => crud.update(i.id, { category: e.target.value })} />
-            <button className="btn-danger" onClick={() => { sRemove(); crud.remove(i.id); showToast("Item removed."); }}>Remove</button>
+      <div className="mg-list">
+        {shown.length === 0 && <div className="mg-empty">{q ? "No items match your search." : "No items yet — add your first one."}</div>}
+        {shown.map((i) => (
+          <div key={i.id} className="mg-row">
+            <div className="mg-thumb">{i.img ? <img src={i.img} alt="" /> : <span>🔩</span>}</div>
+            <div className="mg-main">
+              <div className="mg-name">{i.name}</div>
+              <div className="mg-sub">{i.category || "Misc"}</div>
+            </div>
+            <div className="mg-price">{money(i.price)}</div>
+            <div className="mg-actions">
+              <button className="btn-ghost sm" onClick={() => openEdit(i)}>Edit</button>
+              <DeleteBtn onConfirm={() => { sRemove(); crud.remove(i.id); showToast("Item removed."); }} />
+            </div>
           </div>
         ))}
       </div>
+      {editing && (
+        <Modal title={editing.isNew ? "Add item" : "Edit item"} onClose={() => setEditing(null)}
+          footer={<>
+            <button className="btn-ghost" onClick={() => setEditing(null)}>Cancel</button>
+            <button className="btn-primary" onClick={save}>{editing.isNew ? "Add item" : "Save changes"}</button>
+          </>}>
+          <Field label="Picture"><ImgUpload value={editing.row.img} onChange={(img) => set({ img })} /></Field>
+          <Field label="Name"><input className="search wide" autoFocus value={editing.row.name} onChange={(e) => set({ name: e.target.value })} /></Field>
+          <Field label="Price ($)"><input className="search wide" type="number" min="0" value={editing.row.price} onChange={(e) => set({ price: e.target.value })} /></Field>
+          <Field label="Category"><input className="search wide" placeholder="e.g. Parts, Performance" value={editing.row.category || ""} onChange={(e) => set({ category: e.target.value })} /></Field>
+        </Modal>
+      )}
     </div>
   );
 }
 
 function DealsEditor({ deals, crud, showToast }) {
-  const [draft, setDraft] = useState({ name: "", desc: "", price: "", img: null });
-  const add = () => {
-    if (!draft.name || draft.price === "") { sError(); showToast("Deal needs a name and price.", false); return; }
-    crud.add({ id: uid(), name: draft.name, desc: draft.desc, price: Number(draft.price), img: draft.img });
-    setDraft({ name: "", desc: "", price: "", img: null });
-    sSuccess(); showToast("Deal added.");
+  const [editing, setEditing] = useState(null);
+  const openAdd = () => { sClick(); setEditing({ isNew: true, row: { id: uid(), name: "", desc: "", price: "", img: null } }); };
+  const openEdit = (row) => { sClick(); setEditing({ isNew: false, row: { ...row } }); };
+  const set = (patch) => setEditing((e) => ({ ...e, row: { ...e.row, ...patch } }));
+  const save = () => {
+    const r = editing.row;
+    if (!r.name.trim() || r.price === "" || isNaN(Number(r.price))) { sError(); showToast("Deal needs a name and a valid price.", false); return; }
+    crud.save({ ...r, name: r.name.trim(), price: Number(r.price) });
+    setEditing(null); sSuccess(); showToast(editing.isNew ? "Deal added." : "Deal updated.");
   };
   return (
     <div>
-      <div className="editor-add">
-        <ImgUpload value={draft.img} onChange={(img) => setDraft({ ...draft, img })} />
-        <input className="search" placeholder="Deal name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-        <input className="search" placeholder="Description" value={draft.desc} onChange={(e) => setDraft({ ...draft, desc: e.target.value })} />
-        <input className="search num" type="number" placeholder="Price" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} />
-        <button className="btn-primary" onClick={add}>Add deal</button>
+      <div className="mg-toolbar">
+        <div className="mg-toolbar-spacer" />
+        <button className="btn-primary" onClick={openAdd}>＋ Add deal</button>
       </div>
-      <div className="editor-list">
+      <div className="mg-list">
+        {deals.length === 0 && <div className="mg-empty">No deals yet — add your first one.</div>}
         {deals.map((d) => (
-          <div key={d.id} className="editor-row">
-            <ImgUpload value={d.img} onChange={(img) => crud.update(d.id, { img })} />
-            <input className="search" value={d.name} onChange={(e) => crud.update(d.id, { name: e.target.value })} />
-            <input className="search" value={d.desc} onChange={(e) => crud.update(d.id, { desc: e.target.value })} />
-            <input className="search num" type="number" value={d.price} onChange={(e) => crud.update(d.id, { price: Number(e.target.value) })} />
-            <button className="btn-danger" onClick={() => { sRemove(); crud.remove(d.id); showToast("Deal removed."); }}>Remove</button>
+          <div key={d.id} className="mg-row">
+            <div className="mg-thumb">{d.img ? <img src={d.img} alt="" /> : <span>★</span>}</div>
+            <div className="mg-main">
+              <div className="mg-name">{d.name}</div>
+              <div className="mg-sub">{d.desc}</div>
+            </div>
+            <div className="mg-price">{money(d.price)}</div>
+            <div className="mg-actions">
+              <button className="btn-ghost sm" onClick={() => openEdit(d)}>Edit</button>
+              <DeleteBtn onConfirm={() => { sRemove(); crud.remove(d.id); showToast("Deal removed."); }} />
+            </div>
           </div>
         ))}
       </div>
+      {editing && (
+        <Modal title={editing.isNew ? "Add deal" : "Edit deal"} onClose={() => setEditing(null)}
+          footer={<>
+            <button className="btn-ghost" onClick={() => setEditing(null)}>Cancel</button>
+            <button className="btn-primary" onClick={save}>{editing.isNew ? "Add deal" : "Save changes"}</button>
+          </>}>
+          <Field label="Picture"><ImgUpload value={editing.row.img} onChange={(img) => set({ img })} /></Field>
+          <Field label="Name"><input className="search wide" autoFocus value={editing.row.name} onChange={(e) => set({ name: e.target.value })} /></Field>
+          <Field label="Description"><input className="search wide" value={editing.row.desc || ""} onChange={(e) => set({ desc: e.target.value })} /></Field>
+          <Field label="Price ($)"><input className="search wide" type="number" min="0" value={editing.row.price} onChange={(e) => set({ price: e.target.value })} /></Field>
+        </Modal>
+      )}
     </div>
   );
 }
 
 function EmployeesEditor({ employees, crud, showToast }) {
-  const [draft, setDraft] = useState({ name: "", pin: "", role: "employee" });
-  const add = () => {
-    if (!draft.name || !draft.pin) { sError(); showToast("Employee needs a name and PIN.", false); return; }
-    crud.add({ id: uid(), ...draft });
-    setDraft({ name: "", pin: "", role: "employee" });
-    sSuccess(); showToast("Employee added.");
+  const [editing, setEditing] = useState(null);
+  const [showPin, setShowPin] = useState(false);
+  const openAdd = () => { sClick(); setShowPin(false); setEditing({ isNew: true, row: { id: uid(), name: "", pin: "", role: "employee" } }); };
+  const openEdit = (row) => { sClick(); setShowPin(false); setEditing({ isNew: false, row: { ...row } }); };
+  const set = (patch) => setEditing((e) => ({ ...e, row: { ...e.row, ...patch } }));
+  const save = () => {
+    const r = editing.row;
+    if (!r.name.trim() || !r.pin.trim()) { sError(); showToast("Employee needs a name and a PIN.", false); return; }
+    if (!editing.isNew && r.role === "employee") {
+      const was = employees.find((e) => e.id === r.id);
+      const otherMgrs = employees.filter((e) => e.role === "management" && e.id !== r.id);
+      if (was && was.role === "management" && otherMgrs.length === 0) { sError(); showToast("You need at least one management account.", false); return; }
+    }
+    crud.save({ ...r, name: r.name.trim(), pin: r.pin.trim() });
+    setEditing(null); sSuccess(); showToast(editing.isNew ? "Employee added." : "Employee updated.");
   };
-  const remove = (id) => {
-    const mgrs = employees.filter((e) => e.role === "management");
-    const target = employees.find((e) => e.id === id);
-    if (target.role === "management" && mgrs.length === 1) { sError(); showToast("You need at least one management account.", false); return; }
-    sRemove(); crud.remove(id); showToast("Employee removed.");
+  const remove = (row) => {
+    if (row.role === "management" && employees.filter((e) => e.role === "management").length === 1) {
+      sError(); showToast("You need at least one management account.", false); return;
+    }
+    sRemove(); crud.remove(row.id); showToast("Employee removed.");
   };
   return (
     <div>
-      <div className="editor-add">
-        <input className="search" placeholder="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-        <input className="search num" placeholder="PIN" value={draft.pin} onChange={(e) => setDraft({ ...draft, pin: e.target.value })} />
-        <select className="search" value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value })}>
-          <option value="employee">Employee</option>
-          <option value="management">Management</option>
-        </select>
-        <button className="btn-primary" onClick={add}>Add employee</button>
+      <div className="mg-toolbar">
+        <div className="mg-toolbar-spacer" />
+        <button className="btn-primary" onClick={openAdd}>＋ Add employee</button>
       </div>
-      <div className="editor-list">
+      <div className="mg-list">
         {employees.map((e) => (
-          <div key={e.id} className="editor-row">
-            <input className="search" value={e.name} onChange={(ev) => crud.update(e.id, { name: ev.target.value })} />
-            <input className="search num" value={e.pin} onChange={(ev) => crud.update(e.id, { pin: ev.target.value })} />
-            <select className="search" value={e.role} onChange={(ev) => crud.update(e.id, { role: ev.target.value })}>
-              <option value="employee">Employee</option>
-              <option value="management">Management</option>
-            </select>
-            <button className="btn-danger" onClick={() => remove(e.id)}>Remove</button>
+          <div key={e.id} className="mg-row">
+            <div className="mg-avatar">{(e.name || "?").charAt(0).toUpperCase()}</div>
+            <div className="mg-main">
+              <div className="mg-name">{e.name} {e.role === "management" && <span className="role-badge mgmt">MGMT</span>}</div>
+              <div className="mg-sub">PIN ••••</div>
+            </div>
+            <div className="mg-actions">
+              <button className="btn-ghost sm" onClick={() => openEdit(e)}>Edit</button>
+              <DeleteBtn onConfirm={() => remove(e)} />
+            </div>
           </div>
         ))}
       </div>
+      {editing && (
+        <Modal title={editing.isNew ? "Add employee" : "Edit employee"} onClose={() => setEditing(null)}
+          footer={<>
+            <button className="btn-ghost" onClick={() => setEditing(null)}>Cancel</button>
+            <button className="btn-primary" onClick={save}>{editing.isNew ? "Add employee" : "Save changes"}</button>
+          </>}>
+          <Field label="Name"><input className="search wide" autoFocus value={editing.row.name} onChange={(e) => set({ name: e.target.value })} /></Field>
+          <Field label="PIN">
+            <div className="pin-row">
+              <input className="search" type={showPin ? "text" : "password"} inputMode="numeric" value={editing.row.pin} onChange={(e) => set({ pin: e.target.value })} />
+              <button className="btn-ghost sm" onClick={() => { sClick(); setShowPin(!showPin); }}>{showPin ? "Hide" : "Show"}</button>
+            </div>
+          </Field>
+          <Field label="Role">
+            <select className="search wide" value={editing.row.role} onChange={(e) => set({ role: e.target.value })}>
+              <option value="employee">Employee</option>
+              <option value="management">Management</option>
+            </select>
+          </Field>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -717,54 +824,63 @@ function SettingsEditor({ config, persist, showToast }) {
 /* ============================ CSS ============================ */
 function buildCss(t) {
   return `
-  @import url('https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Rajdhani:wght@500;600;700&display=swap');
   :root {
     --bg: ${t.bg}; --panel: ${t.panel}; --accent: ${t.accent};
     --accent2: ${t.accent2}; --text: ${t.text};
-    --hazard: repeating-linear-gradient(-45deg, ${t.accent} 0 12px, #1a1a1a 12px 24px);
   }
   * { box-sizing: border-box; margin: 0; }
   body { margin: 0; }
   .app-root {
     min-height: 100vh; background: var(--bg); color: var(--text);
-    font-family: "Barlow", "Segoe UI", system-ui, sans-serif;
+    font-family: "Rajdhani", "Segoe UI", system-ui, sans-serif; font-size: 16px;
     background-image:
-      linear-gradient(180deg, rgba(255,255,255,.015) 0 1px, transparent 1px),
-      radial-gradient(ellipse at 50% -20%, rgba(255,255,255,.04), transparent 50%);
-    background-size: 100% 3px, 100% 100%;
+      radial-gradient(ellipse at 50% -20%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
+      radial-gradient(ellipse at 90% 110%, color-mix(in srgb, var(--accent2) 7%, transparent), transparent 45%),
+      linear-gradient(color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 44px 44px, 44px 44px;
+    position: relative;
   }
-  h1, h2, h3, .brand-name, .panel-title, .cart-head, .btn-primary, .nav-btn, .stat-num, .deal-name, .section-label {
-    font-family: "Saira Condensed", "Barlow", sans-serif;
+  .app-root::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 200;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.09) 0 1px, transparent 1px 3px);
+    mix-blend-mode: multiply;
+  }
+  h1, h2, h3, .brand-name, .panel-title, .cart-head, .btn-primary, .nav-btn, .stat-num, .deal-name {
+    font-family: "Chakra Petch", "Rajdhani", sans-serif;
   }
   button { font-family: inherit; cursor: pointer; }
   input, select, textarea { font-family: inherit; }
 
   .topbar {
     position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 20px;
-    padding: 12px 22px; background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 90%, white) 0%, var(--panel) 12%, color-mix(in srgb, var(--panel) 85%, black) 100%);
-    border-bottom: 6px solid transparent;
-    border-image: var(--hazard) 1;
-    box-shadow: 0 4px 20px rgba(0,0,0,.5);
+    padding: 12px 22px; background: color-mix(in srgb, var(--panel) 92%, black);
+    border-bottom: 2px solid var(--accent);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent), 0 4px 24px rgba(0,0,0,.5);
   }
   .brand { display: flex; align-items: center; gap: 12px; min-width: 220px; }
   .brand-logo {
-    width: 48px; height: 48px; border-radius: 2px; background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+    width: 48px; height: 48px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 15%, var(--panel));
     display: flex; align-items: center; justify-content: center; font-size: 24px; overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--accent2) 45%, transparent);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.08), inset 0 -2px 4px rgba(0,0,0,.4);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   }
   .brand-logo img { width: 100%; height: 100%; object-fit: contain; }
-  .brand-name { font-weight: 700; letter-spacing: 2px; font-size: 18px; text-transform: uppercase; }
-  .brand-sub { font-size: 10px; letter-spacing: 3px; opacity: .5; text-transform: uppercase; }
+  .brand-name { font-weight: 700; letter-spacing: 1.5px; font-size: 17px; text-transform: uppercase;
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent); }
+  .brand-sub { font-size: 10px; letter-spacing: 3px; opacity: .55; text-transform: uppercase; color: var(--accent2); }
   .nav { display: flex; gap: 6px; flex: 1; justify-content: center; flex-wrap: wrap; }
   .nav-btn {
-    background: transparent; border: 1px solid transparent; color: var(--text); opacity: .6;
-    padding: 8px 18px; border-radius: 2px; font-size: 14px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase;
-    transition: all .15s ease;
+    background: transparent; border: none; color: var(--text); opacity: .6;
+    padding: 9px 18px; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;
+    transition: all .18s ease; border-bottom: 2px solid transparent;
   }
-  .nav-btn:hover { opacity: 1; border-color: color-mix(in srgb, var(--accent2) 40%, transparent); background: rgba(255,255,255,.03); }
-  .nav-btn.active { opacity: 1; color: var(--bg); background: var(--accent); font-weight: 700;
-    box-shadow: inset 0 -2px 0 rgba(0,0,0,.25), 0 2px 8px rgba(0,0,0,.4); }
+  .nav-btn:hover { opacity: 1; background: color-mix(in srgb, var(--accent) 8%, transparent); transform: translateY(-1px);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent); }
+  .nav-btn.active { opacity: 1; color: var(--accent); border-bottom-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 80%, transparent);
+    box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--accent) 70%, transparent); }
   .userbox { display: flex; align-items: center; gap: 12px; }
   .user-name { font-weight: 700; font-size: 14px; }
   .user-role { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); }
@@ -773,29 +889,29 @@ function buildCss(t) {
   @keyframes panelIn { from { opacity: 0; transform: translateY(14px) scale(.995); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .panel-wrap { animation: none; } }
   .panel { max-width: 1200px; margin: 0 auto; padding: 28px 22px 60px; }
-  .panel-title { font-size: 26px; margin-bottom: 18px; letter-spacing: 3px; text-transform: uppercase;
-    border-left: 5px solid var(--accent); padding-left: 14px; line-height: 1.1; }
+  .panel-title { font-size: 24px; margin-bottom: 18px; letter-spacing: 3px; text-transform: uppercase;
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent);
+    border-left: 4px solid var(--accent2); padding-left: 12px; }
   .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; opacity: .55; margin: 22px 0 10px; }
   .muted { opacity: .55; } .pad { padding: 18px; } .sm-text { font-size: 12px; margin-top: 6px; }
 
-  .hero { background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, white) 0%, var(--panel) 8%, color-mix(in srgb, var(--panel) 88%, black) 100%);
-    border-radius: 3px; padding: 30px; border: 1px solid color-mix(in srgb, var(--accent2) 30%, transparent);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 6px 18px rgba(0,0,0,.35);
-    position: relative; overflow: hidden; }
-  .hero::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: var(--hazard); }
-  .hero h2 { font-size: 30px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .hero { background: linear-gradient(140deg, var(--panel), color-mix(in srgb, var(--panel) 75%, black));
+    border-radius: 8px; padding: 30px; border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+    border-left: 3px solid var(--accent);
+    box-shadow: inset 0 0 40px color-mix(in srgb, var(--accent) 4%, transparent), 0 0 20px color-mix(in srgb, var(--accent) 10%, transparent); }
+  .hero h2 { font-size: 28px; letter-spacing: 1px; text-transform: uppercase;
+    text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 50%, transparent); }
   .hero p { opacity: .6; margin: 6px 0 16px; }
   .big-search { width: 100%; font-size: 17px; padding: 14px 18px; }
   .pc-results { margin-top: 12px; }
   .pc-row { display: flex; justify-content: space-between; padding: 10px 14px; border-radius: 8px; background: color-mix(in srgb, var(--bg) 60%, transparent); margin-bottom: 6px; }
   .pc-price { color: var(--accent); font-weight: 800; }
   .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 18px; }
-  .stat-card { background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, white) 0%, var(--panel) 10%, color-mix(in srgb, var(--panel) 90%, black) 100%);
-    border: 1px solid color-mix(in srgb, var(--accent2) 30%, transparent); border-radius: 3px; padding: 20px; text-align: left; color: var(--text); transition: all .15s ease;
-    border-left: 4px solid var(--accent2);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
-  .stat-card:hover { transform: translateY(-2px); border-left-color: var(--accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 8px 20px rgba(0,0,0,.4); }
-  .stat-num { font-size: 36px; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
+  .stat-card { background: var(--panel); border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 6px; padding: 20px; text-align: left; color: var(--text); transition: all .18s ease; }
+  .stat-card:hover { transform: translateY(-3px); border-color: var(--accent2);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent2) 35%, transparent); }
+  .stat-num { font-size: 34px; font-weight: 700; color: var(--accent);
+    text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 65%, transparent); }
   .stat-label { opacity: .65; margin-top: 2px; }
   .stat-go { margin-top: 12px; font-size: 13px; color: var(--accent2); font-weight: 600; }
 
@@ -803,44 +919,42 @@ function buildCss(t) {
   @media (max-width: 900px) { .register-grid { grid-template-columns: 1fr; } }
   .reg-controls { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
   .search {
-    background: color-mix(in srgb, var(--bg) 75%, black); color: var(--text);
-    border: 1px solid color-mix(in srgb, var(--accent2) 30%, transparent); border-radius: 2px;
+    background: color-mix(in srgb, var(--bg) 70%, black); color: var(--text);
+    border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); border-radius: 10px;
     padding: 10px 14px; font-size: 14px; outline: none; transition: border .15s;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,.35);
   }
   .search:focus { border-color: var(--accent); }
   .search.num { width: 110px; } .search.wide { width: 100%; }
   .cat-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .cat-chip, .deal-chip, .emp-chip {
-    background: var(--panel); color: var(--text); border: 1px solid color-mix(in srgb, var(--accent2) 35%, transparent);
-    padding: 6px 14px; border-radius: 2px; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 600; transition: all .12s;
+    background: var(--panel); color: var(--text); border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+    padding: 7px 14px; border-radius: 999px; font-size: 13px; transition: all .15s;
   }
-  .cat-chip:hover, .deal-chip:hover, .emp-chip:hover { border-color: var(--accent); }
-  .cat-chip.sel, .emp-chip.sel { background: var(--accent); color: #17181a; border-color: var(--accent); font-weight: 700;
-    box-shadow: inset 0 -2px 0 rgba(0,0,0,.2); }
+  .cat-chip:hover, .deal-chip:hover, .emp-chip:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .cat-chip.sel, .emp-chip.sel { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700; }
   .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .item-card {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, white) 0%, var(--panel) 12%, color-mix(in srgb, var(--panel) 90%, black) 100%);
-    border: 1px solid color-mix(in srgb, var(--accent2) 28%, transparent); border-radius: 3px;
-    padding: 12px; color: var(--text); text-align: center; transition: all .12s ease;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+    background: linear-gradient(160deg, var(--panel), color-mix(in srgb, var(--panel) 80%, black));
+    border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 6px;
+    padding: 12px; color: var(--text); text-align: center; transition: all .15s ease;
   }
-  .item-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 6px 16px rgba(0,0,0,.4); }
-  .item-card:active { transform: translateY(0) scale(.97); }
+  .item-card:hover { transform: translateY(-3px); border-color: var(--accent);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 40%, transparent), inset 0 0 20px color-mix(in srgb, var(--accent) 6%, transparent); }
+  .item-card:active { transform: scale(.96); }
   .item-img { height: 80px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 8px; }
   .item-img img { max-height: 80px; max-width: 100%; object-fit: contain; border-radius: 8px; }
   .item-name { font-size: 13px; font-weight: 600; min-height: 32px; }
-  .item-price { color: var(--accent); font-weight: 700; margin-top: 4px; font-family: "Saira Condensed", sans-serif; font-size: 16px; letter-spacing: 1px; }
+  .item-price { color: var(--accent); font-weight: 800; margin-top: 4px; font-family: "Chakra Petch", sans-serif;
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent); }
   .deal-strip { display: flex; gap: 8px; flex-wrap: wrap; }
 
-  .cart { background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, white) 0%, var(--panel) 8%, color-mix(in srgb, var(--panel) 90%, black) 100%);
-    border-radius: 3px; border: 1px solid color-mix(in srgb, var(--accent2) 35%, transparent);
-    padding: 16px; position: sticky; top: 92px; display: flex; flex-direction: column; gap: 12px;
-    position: sticky; overflow: hidden;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 8px 24px rgba(0,0,0,.4); }
-  .cart::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: var(--hazard); }
-  .cart-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 16px;
-    letter-spacing: 3px; text-transform: uppercase; margin-top: 4px; }
+  .cart { background: var(--panel); border-radius: 8px; border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-top: 2px solid var(--accent);
+    padding: 16px; position: sticky; top: 86px; display: flex; flex-direction: column; gap: 12px;
+    box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 12%, transparent); }
+  .cart-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px;
+    letter-spacing: 2.5px; text-transform: uppercase; color: var(--accent);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent); }
   .cart-lines { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
   .cart-line { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;
     background: color-mix(in srgb, var(--bg) 55%, transparent); padding: 8px 10px; border-radius: 10px; animation: lineIn .18s ease; }
@@ -857,29 +971,55 @@ function buildCss(t) {
     border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); border-radius: 8px; padding: 6px 10px; }
   .totals { border-top: 1px dashed color-mix(in srgb, var(--text) 20%, transparent); padding-top: 10px; }
   .t-row { display: flex; justify-content: space-between; font-size: 14px; padding: 3px 0; opacity: .8; }
-  .t-row.grand { font-size: 22px; font-weight: 700; opacity: 1; color: var(--accent); font-family: "Saira Condensed", sans-serif; letter-spacing: 1.5px; text-transform: uppercase; }
+  .t-row.grand { font-size: 22px; font-weight: 800; opacity: 1; color: var(--accent); font-family: "Chakra Petch", sans-serif;
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent); }
 
   .deals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-  .deal-card { background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, white) 0%, var(--panel) 8%, color-mix(in srgb, var(--panel) 90%, black) 100%);
-    border-radius: 3px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent2) 30%, transparent); display: flex; flex-direction: column; transition: all .15s;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
-  .deal-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 8px 20px rgba(0,0,0,.4); }
-  .deal-img { height: 120px; display: flex; align-items: center; justify-content: center; font-size: 42px; color: var(--accent);
-    background: repeating-linear-gradient(-45deg, rgba(0,0,0,.25) 0 14px, transparent 14px 28px), color-mix(in srgb, var(--panel) 80%, black); }
+  .deal-card { background: var(--panel); border-radius: 8px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent2) 25%, transparent); display: flex; flex-direction: column; transition: all .18s; }
+  .deal-card:hover { transform: translateY(-3px); border-color: var(--accent2);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent2) 40%, transparent); }
+  .deal-img { height: 120px; display: flex; align-items: center; justify-content: center; font-size: 42px; color: var(--accent2);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent2) 14%, transparent), color-mix(in srgb, var(--accent) 8%, transparent));
+    text-shadow: 0 0 18px color-mix(in srgb, var(--accent2) 70%, transparent); }
   .deal-img img { height: 100%; width: 100%; object-fit: cover; }
   .deal-body { padding: 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
-  .deal-name { font-weight: 700; font-size: 17px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .deal-name { font-weight: 800; font-size: 16px; }
   .deal-desc { opacity: .6; font-size: 13px; flex: 1; }
   .deal-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-  .deal-price { color: var(--accent); font-weight: 800; font-size: 18px; }
+  .deal-price { color: var(--accent); font-weight: 800; font-size: 18px; font-family: "Chakra Petch", sans-serif;
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent); }
 
-  .info-card { background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, white) 0%, var(--panel) 6%, color-mix(in srgb, var(--panel) 90%, black) 100%);
-    border-radius: 3px; padding: 24px; border: 1px solid color-mix(in srgb, var(--accent2) 30%, transparent);
-    border-left: 5px solid var(--accent); line-height: 1.7;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+  .info-card { background: var(--panel); border-radius: 14px; padding: 24px; border-left: 4px solid var(--accent); line-height: 1.7; }
   .info-card .spacer { height: 10px; }
 
   .mg-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .mg-toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
+  .mg-toolbar .search { flex: 1; }
+  .mg-toolbar-spacer { flex: 1; }
+  .mg-list { display: flex; flex-direction: column; gap: 8px; }
+  .mg-row { display: flex; align-items: center; gap: 14px; background: var(--panel); border: 1px solid color-mix(in srgb, var(--text) 10%, transparent); border-radius: 5px; padding: 10px 14px; }
+  .mg-thumb { width: 40px; height: 40px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--bg) 60%, transparent); display: flex; align-items: center; justify-content: center; font-size: 18px; flex: none; }
+  .mg-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .mg-avatar { width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 18%, var(--panel)); color: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 700; flex: none; }
+  .mg-main { flex: 1; min-width: 0; }
+  .mg-name { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .mg-sub { font-size: 12px; opacity: .55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mg-price { font-weight: 700; color: var(--accent); white-space: nowrap; }
+  .mg-actions { display: flex; gap: 8px; flex: none; }
+  .mg-empty { opacity: .5; padding: 24px; text-align: center; }
+  .role-badge { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; background: color-mix(in srgb, var(--accent2) 25%, transparent); }
+  .role-badge.mgmt { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+  .btn-danger.sm { padding: 5px 12px; font-size: 12px; }
+  .btn-danger.armed { background: #b04130; color: #fff; border-color: #b04130; }
+  .modal-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,.62); display: flex; align-items: center; justify-content: center; padding: 20px; animation: toastIn .18s ease; }
+  .modal-card { background: var(--panel); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 6px; width: 100%; max-width: 440px; box-shadow: 0 30px 80px rgba(0,0,0,.6); animation: panelIn .22s ease; }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; font-weight: 700; font-size: 16px; border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent); }
+  .modal-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; max-height: 60vh; overflow-y: auto; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent); }
+  .field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; opacity: .6; margin-bottom: 6px; }
+  .pin-row { display: flex; gap: 8px; }
+  .pin-row .search { flex: 1; }
+  @media (max-width: 640px) { .mg-row { flex-wrap: wrap; } .mg-actions { width: 100%; justify-content: flex-end; } }
   .editor-add, .editor-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
     background: var(--panel); padding: 12px; border-radius: 12px; margin-bottom: 10px;
     border: 1px solid color-mix(in srgb, var(--text) 8%, transparent); }
@@ -902,13 +1042,14 @@ function buildCss(t) {
   .color-row input[type=color] { width: 44px; height: 36px; border: none; background: none; cursor: pointer; padding: 0; }
 
   .btn-primary {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 90%, white), var(--accent) 40%, color-mix(in srgb, var(--accent) 85%, black));
-    color: #17181a; border: none; border-radius: 2px;
-    padding: 10px 20px; font-weight: 700; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; transition: all .12s;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 0 rgba(0,0,0,.25), 0 3px 8px rgba(0,0,0,.4);
+    background: linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent) 60%, var(--accent2)));
+    color: var(--bg); border: none; border-radius: 4px;
+    padding: 10px 20px; font-weight: 700; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; transition: all .15s;
+    box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent);
   }
-  .btn-primary:hover { filter: brightness(1.08); }
-  .btn-primary:active { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(0,0,0,.3); }
+  .btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px);
+    box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 70%, transparent); }
+  .btn-primary:active { transform: scale(.97); }
   .btn-primary:disabled { opacity: .5; cursor: wait; }
   .btn-primary.big { padding: 14px; font-size: 16px; width: 100%; }
   .btn-primary.sm { padding: 7px 14px; font-size: 13px; }
@@ -919,30 +1060,34 @@ function buildCss(t) {
   .btn-danger:hover { background: #b0413022; }
 
   .login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;
-    background-image: linear-gradient(180deg, rgba(255,255,255,.015) 0 1px, transparent 1px);
-    background-size: 100% 3px; }
-  .login-card { background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, white) 0%, var(--panel) 6%, color-mix(in srgb, var(--panel) 88%, black) 100%);
-    border-radius: 3px; padding: 40px 36px 36px; width: 100%; max-width: 420px; text-align: center;
-    border: 1px solid color-mix(in srgb, var(--accent2) 35%, transparent);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 30px 80px rgba(0,0,0,.55); animation: panelIn .35s ease;
-    position: relative; overflow: hidden; }
-  .login-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: var(--hazard); }
+    background-image:
+      radial-gradient(ellipse at 50% 120%, color-mix(in srgb, var(--accent2) 12%, transparent), transparent 60%),
+      linear-gradient(color-mix(in srgb, var(--accent) 5%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, transparent) 1px, transparent 1px);
+    background-size: 100% 100%, 44px 44px, 44px 44px; }
+  .login-card { background: color-mix(in srgb, var(--panel) 92%, black); border-radius: 10px; padding: 36px; width: 100%; max-width: 420px; text-align: center;
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top: 3px solid var(--accent);
+    box-shadow: 0 0 40px color-mix(in srgb, var(--accent) 22%, transparent), 0 30px 80px rgba(0,0,0,.6);
+    animation: panelIn .35s ease; }
   .login-logo { width: 84px; height: 84px; margin: 0 auto 14px; border-radius: 18px; overflow: hidden;
     background: color-mix(in srgb, var(--accent) 14%, var(--bg)); display: flex; align-items: center; justify-content: center; font-size: 40px; }
   .login-logo img { width: 100%; height: 100%; object-fit: contain; }
-  .login-card h1 { font-size: 26px; letter-spacing: 2.5px; text-transform: uppercase; }
+  .login-card h1 { font-size: 24px; letter-spacing: 2px; text-transform: uppercase;
+    text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 60%, transparent); }
   .tagline { font-size: 10px; letter-spacing: 3px; opacity: .5; text-transform: uppercase; margin: 4px 0 22px; }
   .login-emps { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
   .mgr-tag { font-size: 9px; margin-left: 6px; padding: 1px 6px; border-radius: 99px; background: color-mix(in srgb, var(--accent2) 30%, transparent); letter-spacing: 1px; }
   .pin-input { width: 100%; text-align: center; letter-spacing: 8px; font-size: 20px; padding: 12px;
     background: color-mix(in srgb, var(--bg) 70%, black); color: var(--text);
     border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); border-radius: 12px; margin-bottom: 14px; outline: none; }
-  .pin-input:focus { border-color: var(--accent); }
+  .pin-input:focus { border-color: var(--accent); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .search:focus { box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent); }
   .login-err { color: #e06455; font-size: 13px; margin-bottom: 10px; }
 
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 100;
     background: var(--panel); color: var(--text); padding: 12px 22px; border-radius: 12px; font-size: 14px; font-weight: 600;
-    box-shadow: 0 12px 40px rgba(0,0,0,.5); border-left: 4px solid var(--accent); animation: toastIn .25s ease; }
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 35%, transparent), 0 12px 40px rgba(0,0,0,.5);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-left: 4px solid var(--accent); animation: toastIn .25s ease; }
   .toast.bad { border-left-color: #e06455; }
   @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translate(-50%, 0); } }
   `;
