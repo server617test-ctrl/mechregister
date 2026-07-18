@@ -8,11 +8,11 @@ import { supabase } from "./supabase";
    ============================================================ */
 
 const DEFAULT_THEME = {
-  bg: "#101418",
-  panel: "#1a2027",
-  accent: "#f5a623",
-  accent2: "#2e88ff",
-  text: "#e8edf2",
+  bg: "#070811",
+  panel: "#0d1020",
+  accent: "#00e5ff",
+  accent2: "#ff2d95",
+  text: "#e6f6ff",
 };
 
 const DEFAULT_CONFIG = {
@@ -717,6 +717,7 @@ function SettingsEditor({ config, persist, showToast }) {
 /* ============================ CSS ============================ */
 function buildCss(t) {
   return `
+  @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Rajdhani:wght@500;600;700&display=swap');
   :root {
     --bg: ${t.bg}; --panel: ${t.panel}; --accent: ${t.accent};
     --accent2: ${t.accent2}; --text: ${t.text};
@@ -725,17 +726,31 @@ function buildCss(t) {
   body { margin: 0; }
   .app-root {
     min-height: 100vh; background: var(--bg); color: var(--text);
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    background-image: radial-gradient(ellipse at 20% -10%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 55%);
+    font-family: "Rajdhani", "Segoe UI", system-ui, sans-serif; font-size: 16px;
+    background-image:
+      radial-gradient(ellipse at 50% -20%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
+      radial-gradient(ellipse at 90% 110%, color-mix(in srgb, var(--accent2) 7%, transparent), transparent 45%),
+      linear-gradient(color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 44px 44px, 44px 44px;
+    position: relative;
+  }
+  .app-root::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 200;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.09) 0 1px, transparent 1px 3px);
+    mix-blend-mode: multiply;
+  }
+  h1, h2, h3, .brand-name, .panel-title, .cart-head, .btn-primary, .nav-btn, .stat-num, .deal-name {
+    font-family: "Chakra Petch", "Rajdhani", sans-serif;
   }
   button { font-family: inherit; cursor: pointer; }
   input, select, textarea { font-family: inherit; }
 
   .topbar {
     position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 20px;
-    padding: 12px 22px; background: color-mix(in srgb, var(--panel) 88%, black);
-    border-bottom: 3px solid var(--accent);
-    box-shadow: 0 4px 24px rgba(0,0,0,.45);
+    padding: 12px 22px; background: color-mix(in srgb, var(--panel) 92%, black);
+    border-bottom: 2px solid var(--accent);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent), 0 4px 24px rgba(0,0,0,.5);
   }
   .brand { display: flex; align-items: center; gap: 12px; min-width: 220px; }
   .brand-logo {
@@ -744,16 +759,21 @@ function buildCss(t) {
     border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   }
   .brand-logo img { width: 100%; height: 100%; object-fit: contain; }
-  .brand-name { font-weight: 800; letter-spacing: .5px; font-size: 17px; }
-  .brand-sub { font-size: 10px; letter-spacing: 2px; opacity: .55; text-transform: uppercase; }
+  .brand-name { font-weight: 700; letter-spacing: 1.5px; font-size: 17px; text-transform: uppercase;
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent); }
+  .brand-sub { font-size: 10px; letter-spacing: 3px; opacity: .55; text-transform: uppercase; color: var(--accent2); }
   .nav { display: flex; gap: 6px; flex: 1; justify-content: center; flex-wrap: wrap; }
   .nav-btn {
-    background: transparent; border: none; color: var(--text); opacity: .65;
-    padding: 9px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; letter-spacing: .4px;
+    background: transparent; border: none; color: var(--text); opacity: .6;
+    padding: 9px 18px; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;
     transition: all .18s ease; border-bottom: 2px solid transparent;
   }
-  .nav-btn:hover { opacity: 1; background: color-mix(in srgb, var(--text) 6%, transparent); transform: translateY(-1px); }
-  .nav-btn.active { opacity: 1; color: var(--accent); border-bottom-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .nav-btn:hover { opacity: 1; background: color-mix(in srgb, var(--accent) 8%, transparent); transform: translateY(-1px);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent); }
+  .nav-btn.active { opacity: 1; color: var(--accent); border-bottom-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 80%, transparent);
+    box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--accent) 70%, transparent); }
   .userbox { display: flex; align-items: center; gap: 12px; }
   .user-name { font-weight: 700; font-size: 14px; }
   .user-role { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); }
@@ -762,21 +782,29 @@ function buildCss(t) {
   @keyframes panelIn { from { opacity: 0; transform: translateY(14px) scale(.995); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .panel-wrap { animation: none; } }
   .panel { max-width: 1200px; margin: 0 auto; padding: 28px 22px 60px; }
-  .panel-title { font-size: 26px; margin-bottom: 18px; letter-spacing: .5px; }
+  .panel-title { font-size: 24px; margin-bottom: 18px; letter-spacing: 3px; text-transform: uppercase;
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent);
+    border-left: 4px solid var(--accent2); padding-left: 12px; }
   .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; opacity: .55; margin: 22px 0 10px; }
   .muted { opacity: .55; } .pad { padding: 18px; } .sm-text { font-size: 12px; margin-top: 6px; }
 
-  .hero { background: var(--panel); border-radius: 16px; padding: 30px; border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-    background-image: repeating-linear-gradient(-45deg, transparent 0 26px, color-mix(in srgb, var(--accent) 4%, transparent) 26px 52px); }
-  .hero h2 { font-size: 28px; } .hero p { opacity: .6; margin: 6px 0 16px; }
+  .hero { background: linear-gradient(140deg, var(--panel), color-mix(in srgb, var(--panel) 75%, black));
+    border-radius: 8px; padding: 30px; border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+    border-left: 3px solid var(--accent);
+    box-shadow: inset 0 0 40px color-mix(in srgb, var(--accent) 4%, transparent), 0 0 20px color-mix(in srgb, var(--accent) 10%, transparent); }
+  .hero h2 { font-size: 28px; letter-spacing: 1px; text-transform: uppercase;
+    text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 50%, transparent); }
+  .hero p { opacity: .6; margin: 6px 0 16px; }
   .big-search { width: 100%; font-size: 17px; padding: 14px 18px; }
   .pc-results { margin-top: 12px; }
   .pc-row { display: flex; justify-content: space-between; padding: 10px 14px; border-radius: 8px; background: color-mix(in srgb, var(--bg) 60%, transparent); margin-bottom: 6px; }
   .pc-price { color: var(--accent); font-weight: 800; }
   .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 18px; }
-  .stat-card { background: var(--panel); border: 1px solid color-mix(in srgb, var(--text) 8%, transparent); border-radius: 14px; padding: 20px; text-align: left; color: var(--text); transition: all .18s ease; }
-  .stat-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
-  .stat-num { font-size: 34px; font-weight: 800; color: var(--accent); }
+  .stat-card { background: var(--panel); border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 6px; padding: 20px; text-align: left; color: var(--text); transition: all .18s ease; }
+  .stat-card:hover { transform: translateY(-3px); border-color: var(--accent2);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent2) 35%, transparent); }
+  .stat-num { font-size: 34px; font-weight: 700; color: var(--accent);
+    text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 65%, transparent); }
   .stat-label { opacity: .65; margin-top: 2px; }
   .stat-go { margin-top: 12px; font-size: 13px; color: var(--accent2); font-weight: 600; }
 
@@ -799,20 +827,27 @@ function buildCss(t) {
   .cat-chip.sel, .emp-chip.sel { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700; }
   .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .item-card {
-    background: var(--panel); border: 1px solid color-mix(in srgb, var(--text) 8%, transparent); border-radius: 12px;
+    background: linear-gradient(160deg, var(--panel), color-mix(in srgb, var(--panel) 80%, black));
+    border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 6px;
     padding: 12px; color: var(--text); text-align: center; transition: all .15s ease;
   }
-  .item-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+  .item-card:hover { transform: translateY(-3px); border-color: var(--accent);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 40%, transparent), inset 0 0 20px color-mix(in srgb, var(--accent) 6%, transparent); }
   .item-card:active { transform: scale(.96); }
   .item-img { height: 80px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 8px; }
   .item-img img { max-height: 80px; max-width: 100%; object-fit: contain; border-radius: 8px; }
   .item-name { font-size: 13px; font-weight: 600; min-height: 32px; }
-  .item-price { color: var(--accent); font-weight: 800; margin-top: 4px; }
+  .item-price { color: var(--accent); font-weight: 800; margin-top: 4px; font-family: "Chakra Petch", sans-serif;
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent); }
   .deal-strip { display: flex; gap: 8px; flex-wrap: wrap; }
 
-  .cart { background: var(--panel); border-radius: 16px; border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-    padding: 16px; position: sticky; top: 86px; display: flex; flex-direction: column; gap: 12px; }
-  .cart-head { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 16px; letter-spacing: .5px; }
+  .cart { background: var(--panel); border-radius: 8px; border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-top: 2px solid var(--accent);
+    padding: 16px; position: sticky; top: 86px; display: flex; flex-direction: column; gap: 12px;
+    box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 12%, transparent); }
+  .cart-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px;
+    letter-spacing: 2.5px; text-transform: uppercase; color: var(--accent);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent); }
   .cart-lines { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
   .cart-line { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;
     background: color-mix(in srgb, var(--bg) 55%, transparent); padding: 8px 10px; border-radius: 10px; animation: lineIn .18s ease; }
@@ -829,19 +864,23 @@ function buildCss(t) {
     border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); border-radius: 8px; padding: 6px 10px; }
   .totals { border-top: 1px dashed color-mix(in srgb, var(--text) 20%, transparent); padding-top: 10px; }
   .t-row { display: flex; justify-content: space-between; font-size: 14px; padding: 3px 0; opacity: .8; }
-  .t-row.grand { font-size: 20px; font-weight: 800; opacity: 1; color: var(--accent); }
+  .t-row.grand { font-size: 22px; font-weight: 800; opacity: 1; color: var(--accent); font-family: "Chakra Petch", sans-serif;
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent); }
 
   .deals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-  .deal-card { background: var(--panel); border-radius: 14px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--text) 8%, transparent); display: flex; flex-direction: column; transition: all .18s; }
-  .deal-card:hover { transform: translateY(-3px); border-color: var(--accent); }
-  .deal-img { height: 120px; display: flex; align-items: center; justify-content: center; font-size: 42px; color: var(--accent);
-    background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--accent) 10%, transparent) 0 18px, transparent 18px 36px); }
+  .deal-card { background: var(--panel); border-radius: 8px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent2) 25%, transparent); display: flex; flex-direction: column; transition: all .18s; }
+  .deal-card:hover { transform: translateY(-3px); border-color: var(--accent2);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent2) 40%, transparent); }
+  .deal-img { height: 120px; display: flex; align-items: center; justify-content: center; font-size: 42px; color: var(--accent2);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent2) 14%, transparent), color-mix(in srgb, var(--accent) 8%, transparent));
+    text-shadow: 0 0 18px color-mix(in srgb, var(--accent2) 70%, transparent); }
   .deal-img img { height: 100%; width: 100%; object-fit: cover; }
   .deal-body { padding: 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
   .deal-name { font-weight: 800; font-size: 16px; }
   .deal-desc { opacity: .6; font-size: 13px; flex: 1; }
   .deal-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-  .deal-price { color: var(--accent); font-weight: 800; font-size: 18px; }
+  .deal-price { color: var(--accent); font-weight: 800; font-size: 18px; font-family: "Chakra Petch", sans-serif;
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent); }
 
   .info-card { background: var(--panel); border-radius: 14px; padding: 24px; border-left: 4px solid var(--accent); line-height: 1.7; }
   .info-card .spacer { height: 10px; }
@@ -869,10 +908,13 @@ function buildCss(t) {
   .color-row input[type=color] { width: 44px; height: 36px; border: none; background: none; cursor: pointer; padding: 0; }
 
   .btn-primary {
-    background: var(--accent); color: var(--bg); border: none; border-radius: 10px;
-    padding: 10px 20px; font-weight: 800; font-size: 14px; letter-spacing: .3px; transition: all .15s;
+    background: linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent) 60%, var(--accent2)));
+    color: var(--bg); border: none; border-radius: 4px;
+    padding: 10px 20px; font-weight: 700; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; transition: all .15s;
+    box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent);
   }
-  .btn-primary:hover { filter: brightness(1.12); transform: translateY(-1px); }
+  .btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px);
+    box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 70%, transparent); }
   .btn-primary:active { transform: scale(.97); }
   .btn-primary:disabled { opacity: .5; cursor: wait; }
   .btn-primary.big { padding: 14px; font-size: 16px; width: 100%; }
@@ -884,26 +926,34 @@ function buildCss(t) {
   .btn-danger:hover { background: #b0413022; }
 
   .login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;
-    background-image: repeating-linear-gradient(-45deg, transparent 0 40px, color-mix(in srgb, var(--accent) 3%, transparent) 40px 80px); }
-  .login-card { background: var(--panel); border-radius: 20px; padding: 36px; width: 100%; max-width: 420px; text-align: center;
-    border: 1px solid color-mix(in srgb, var(--text) 10%, transparent); border-top: 4px solid var(--accent);
-    box-shadow: 0 30px 80px rgba(0,0,0,.5); animation: panelIn .35s ease; }
+    background-image:
+      radial-gradient(ellipse at 50% 120%, color-mix(in srgb, var(--accent2) 12%, transparent), transparent 60%),
+      linear-gradient(color-mix(in srgb, var(--accent) 5%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, transparent) 1px, transparent 1px);
+    background-size: 100% 100%, 44px 44px, 44px 44px; }
+  .login-card { background: color-mix(in srgb, var(--panel) 92%, black); border-radius: 10px; padding: 36px; width: 100%; max-width: 420px; text-align: center;
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top: 3px solid var(--accent);
+    box-shadow: 0 0 40px color-mix(in srgb, var(--accent) 22%, transparent), 0 30px 80px rgba(0,0,0,.6);
+    animation: panelIn .35s ease; }
   .login-logo { width: 84px; height: 84px; margin: 0 auto 14px; border-radius: 18px; overflow: hidden;
     background: color-mix(in srgb, var(--accent) 14%, var(--bg)); display: flex; align-items: center; justify-content: center; font-size: 40px; }
   .login-logo img { width: 100%; height: 100%; object-fit: contain; }
-  .login-card h1 { font-size: 24px; letter-spacing: .5px; }
+  .login-card h1 { font-size: 24px; letter-spacing: 2px; text-transform: uppercase;
+    text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 60%, transparent); }
   .tagline { font-size: 10px; letter-spacing: 3px; opacity: .5; text-transform: uppercase; margin: 4px 0 22px; }
   .login-emps { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
   .mgr-tag { font-size: 9px; margin-left: 6px; padding: 1px 6px; border-radius: 99px; background: color-mix(in srgb, var(--accent2) 30%, transparent); letter-spacing: 1px; }
   .pin-input { width: 100%; text-align: center; letter-spacing: 8px; font-size: 20px; padding: 12px;
     background: color-mix(in srgb, var(--bg) 70%, black); color: var(--text);
     border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); border-radius: 12px; margin-bottom: 14px; outline: none; }
-  .pin-input:focus { border-color: var(--accent); }
+  .pin-input:focus { border-color: var(--accent); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .search:focus { box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent); }
   .login-err { color: #e06455; font-size: 13px; margin-bottom: 10px; }
 
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 100;
     background: var(--panel); color: var(--text); padding: 12px 22px; border-radius: 12px; font-size: 14px; font-weight: 600;
-    box-shadow: 0 12px 40px rgba(0,0,0,.5); border-left: 4px solid var(--accent); animation: toastIn .25s ease; }
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 35%, transparent), 0 12px 40px rgba(0,0,0,.5);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-left: 4px solid var(--accent); animation: toastIn .25s ease; }
   .toast.bad { border-left-color: #e06455; }
   @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translate(-50%, 0); } }
   `;
