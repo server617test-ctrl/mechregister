@@ -231,6 +231,10 @@ export default function App() {
             )}
             {panel === "deals" && <DealsPanel deals={deals} addToCart={addToCart} />}
             {panel === "info" && <InfoPanel config={config} />}
+            {panel === "myinfo" && (
+              <MyInfoPanel user={user} crud={employeesCrud} showToast={showToast} onUpdateUser={setUser} />
+            )}
+            {panel === "board" && user.role === "management" && <BoardPanel employees={employees} />}
             {panel === "management" && user.role === "management" && (
               <ManagementPanel config={config} persistConfig={persistConfig}
                 items={items} itemsCrud={itemsCrud}
@@ -289,9 +293,9 @@ function LoginScreen({ config, employees, onLogin }) {
 /* ============================ HEADER ============================ */
 function Header({ config, user, panel, onNav, onLogout }) {
   const tabs = [
-    ["main", "Main"], ["register", "Register"], ["deals", "Deals"], ["info", "Info"],
+    ["main", "Main"], ["register", "Register"], ["deals", "Deals"], ["info", "Info"], ["myinfo", "My Info"],
   ];
-  if (user.role === "management") tabs.push(["management", "Management"]);
+  if (user.role === "management") { tabs.push(["board", "Board"]); tabs.push(["management", "Management"]); }
   return (
     <header className="topbar">
       <div className="brand">
@@ -522,6 +526,155 @@ function InfoPanel({ config }) {
         {config.info.split("\n").map((line, i) => (
           <p key={i} className={line.trim() === "" ? "spacer" : ""}>{line}</p>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================ EMPLOYEE BOARD (management only) ============================ */
+function BoardPanel({ employees }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(null);
+  const shown = employees.filter((e) =>
+    (e.name || "").toLowerCase().includes(q.toLowerCase()) ||
+    (e.callsign || "").toLowerCase().includes(q.toLowerCase()) ||
+    (e.specialty || "").toLowerCase().includes(q.toLowerCase())
+  );
+  const mgmt = employees.filter((e) => e.role === "management").length;
+  const filled = employees.filter((e) => e.phone || e.email || e.specialty).length;
+  return (
+    <div className="panel">
+      <h2 className="panel-title">Employee Board</h2>
+      <div className="board-stats">
+        <div className="board-stat"><span className="bs-num">{employees.length}</span><span className="bs-label">On roster</span></div>
+        <div className="board-stat"><span className="bs-num">{mgmt}</span><span className="bs-label">Management</span></div>
+        <div className="board-stat"><span className="bs-num">{filled}</span><span className="bs-label">Profiles filled</span></div>
+      </div>
+      <input className="search wide" placeholder="Search by name, callsign, or specialty…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="board-grid">
+        {shown.length === 0 && <div className="mg-empty">No one matches that search.</div>}
+        {shown.map((e) => (
+          <button key={e.id} className="board-card" onClick={() => { sClick(); setOpen(e); }}>
+            <div className="board-avatar">
+              {e.avatar ? <img src={e.avatar} alt="" /> : (e.name || "?").charAt(0).toUpperCase()}
+            </div>
+            <div className="board-info">
+              <div className="board-name">
+                {e.name}
+                {e.role === "management" && <span className="role-badge mgmt">MGMT</span>}
+              </div>
+              {e.callsign && <div className="board-callsign">"{e.callsign}"</div>}
+              <div className="board-specialty">{e.specialty || "No specialty listed"}</div>
+              <div className="board-contact">
+                {e.phone ? <span>☎ {e.phone}</span> : <span className="dim">☎ —</span>}
+                {e.email ? <span>✉ {e.email}</span> : <span className="dim">✉ —</span>}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+      {open && (
+        <Modal title={open.name} onClose={() => setOpen(null)}
+          footer={<button className="btn-primary" onClick={() => setOpen(null)}>Close</button>}>
+          <div className="profile-head">
+            <div className="board-avatar lg">
+              {open.avatar ? <img src={open.avatar} alt="" /> : (open.name || "?").charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className="mg-name">{open.name} {open.role === "management" && <span className="role-badge mgmt">MGMT</span>}</div>
+              {open.callsign && <div className="board-callsign">"{open.callsign}"</div>}
+              <div className="mg-sub">{open.role === "management" ? "Management" : "Employee"}</div>
+            </div>
+          </div>
+          <ProfileLine label="Phone" value={open.phone} />
+          <ProfileLine label="Email" value={open.email} />
+          <ProfileLine label="Specialty" value={open.specialty} />
+          <ProfileLine label="Usual hours" value={open.schedule} />
+          <ProfileLine label="Started" value={open.hired_on} />
+          <ProfileLine label="Notes" value={open.notes} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function ProfileLine({ label, value }) {
+  return (
+    <div className="profile-line">
+      <span className="pl-label">{label}</span>
+      <span className={"pl-value" + (value ? "" : " dim")}>{value || "Not provided"}</span>
+    </div>
+  );
+}
+
+/* ============================ MY INFO (each employee edits their own) ============================ */
+function MyInfoPanel({ user, crud, showToast, onUpdateUser }) {
+  const [form, setForm] = useState({
+    callsign: user.callsign || "",
+    phone: user.phone || "",
+    email: user.email || "",
+    specialty: user.specialty || "",
+    schedule: user.schedule || "",
+    hired_on: user.hired_on || "",
+    notes: user.notes || "",
+    avatar: user.avatar || null,
+  });
+  const [dirty, setDirty] = useState(false);
+  const set = (patch) => { setForm((f) => ({ ...f, ...patch })); setDirty(true); };
+  const save = () => {
+    const merged = { ...user, ...form };
+    crud.save(merged);
+    onUpdateUser(merged);
+    setDirty(false);
+    sSuccess();
+    showToast("Your info has been saved.");
+  };
+  return (
+    <div className="panel">
+      <h2 className="panel-title">My Info</h2>
+      <div className="myinfo-wrap">
+        <div className="myinfo-card">
+          <div className="myinfo-avatar-row">
+            <div className="board-avatar lg">
+              {form.avatar ? <img src={form.avatar} alt="" /> : (user.name || "?").charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className="mg-name">{user.name}</div>
+              <div className="mg-sub">{user.role === "management" ? "Management" : "Employee"}</div>
+              <ImgUpload value={form.avatar} onChange={(avatar) => set({ avatar })} />
+            </div>
+          </div>
+
+          <div className="privacy-note">
+            Heads up: this info is visible to shop management, and it lives in the shop's database — keep it in-character. Use your character's phone and email, not your real-life contact details.
+          </div>
+
+          <Field label="Callsign / nickname">
+            <input className="search wide" placeholder="e.g. Wrench" value={form.callsign} onChange={(e) => set({ callsign: e.target.value })} />
+          </Field>
+          <Field label="Phone (in-character)">
+            <input className="search wide" placeholder="e.g. 555-0142" value={form.phone} onChange={(e) => set({ phone: e.target.value })} />
+          </Field>
+          <Field label="Email (in-character)">
+            <input className="search wide" placeholder="e.g. wrench@bennys.ls" value={form.email} onChange={(e) => set({ email: e.target.value })} />
+          </Field>
+          <Field label="Specialty">
+            <input className="search wide" placeholder="e.g. Turbo installs, bodywork" value={form.specialty} onChange={(e) => set({ specialty: e.target.value })} />
+          </Field>
+          <Field label="Usual hours">
+            <input className="search wide" placeholder="e.g. Weeknights after 8" value={form.schedule} onChange={(e) => set({ schedule: e.target.value })} />
+          </Field>
+          <Field label="Started at the shop">
+            <input className="search wide" placeholder="e.g. March 2026" value={form.hired_on} onChange={(e) => set({ hired_on: e.target.value })} />
+          </Field>
+          <Field label="Notes for management">
+            <textarea className="search wide" rows={4} placeholder="Anything the bosses should know…" value={form.notes} onChange={(e) => set({ notes: e.target.value })} />
+          </Field>
+
+          <button className="btn-primary big" disabled={!dirty} onClick={save}>
+            {dirty ? "Save my info" : "Saved"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -993,6 +1146,37 @@ function buildCss(t) {
   .info-card .spacer { height: 10px; }
 
   .mg-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .board-stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .board-stat { background: var(--panel); border: 1px solid color-mix(in srgb, var(--text) 10%, transparent); border-radius: 5px; padding: 12px 20px; display: flex; flex-direction: column; }
+  .bs-num { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .bs-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; opacity: .55; }
+  .board-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 14px; }
+  .board-card { display: flex; gap: 14px; align-items: flex-start; text-align: left; background: var(--panel); color: var(--text);
+    border: 1px solid color-mix(in srgb, var(--text) 10%, transparent); border-radius: 6px; padding: 14px; transition: all .15s; }
+  .board-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .board-avatar { width: 46px; height: 46px; border-radius: 50%; flex: none; overflow: hidden;
+    background: color-mix(in srgb, var(--accent) 18%, var(--panel)); color: var(--accent);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; }
+  .board-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .board-avatar.lg { width: 68px; height: 68px; font-size: 26px; }
+  .board-info { flex: 1; min-width: 0; }
+  .board-name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .board-callsign { font-size: 12px; color: var(--accent2); opacity: .9; margin-top: 1px; }
+  .board-specialty { font-size: 13px; opacity: .65; margin-top: 4px; }
+  .board-contact { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; font-size: 12px; opacity: .8; }
+  .board-contact .dim, .pl-value.dim { opacity: .4; }
+  .profile-head { display: flex; gap: 14px; align-items: center; padding-bottom: 12px; border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent); }
+  .profile-line { display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px dashed color-mix(in srgb, var(--text) 8%, transparent); font-size: 13px; }
+  .pl-label { flex: 0 0 110px; text-transform: uppercase; font-size: 11px; letter-spacing: 1.5px; opacity: .55; padding-top: 2px; }
+  .pl-value { flex: 1; white-space: pre-wrap; }
+  .myinfo-wrap { display: flex; justify-content: center; }
+  .myinfo-card { background: var(--panel); border: 1px solid color-mix(in srgb, var(--text) 10%, transparent); border-radius: 6px; padding: 22px; width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 14px; }
+  .myinfo-avatar-row { display: flex; gap: 16px; align-items: center; padding-bottom: 14px; border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent); }
+  .privacy-note { font-size: 12px; line-height: 1.5; padding: 10px 12px; border-radius: 4px; border-left: 3px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent); opacity: .85; }
+  .myinfo-card textarea { resize: vertical; }
+  .btn-primary:disabled { opacity: .45; cursor: default; }
+  @media (max-width: 640px) { .board-grid { grid-template-columns: 1fr; } }
   .mg-toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
   .mg-toolbar .search { flex: 1; }
   .mg-toolbar-spacer { flex: 1; }
